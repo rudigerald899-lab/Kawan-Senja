@@ -13,7 +13,7 @@
 }
 .product-card {
   background: #fff;
-  border: 0.5px solid #e8d5c9;
+  border: 0.5px solid var(--ks-border);
   border-radius: 12px;
   padding: 14px;
   margin-bottom: 18px;
@@ -25,7 +25,7 @@
   width: 48px;
   height: 72px;
   border-radius: 8px;
-  background: linear-gradient(180deg, #6B3E27, #8F573A);
+  background: linear-gradient(180deg, var(--ks-brown-dark), var(--ks-brown));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -35,7 +35,7 @@
 .bottle-label {
   width: 36px;
   height: 44px;
-  background: #FF585D;
+  background: var(--ks-coral);
   border-radius: 4px;
   display: flex;
   flex-direction: column;
@@ -56,12 +56,12 @@
   margin-top: 1px;
 }
 .prod-info { flex: 1; }
-.prod-name { font-size: 15px; font-weight: 500; color: #2C1810; margin-bottom: 2px; }
-.prod-sub { font-size: 12px; color: #8B6555; }
+.prod-name { font-size: 15px; font-weight: 500; color: var(--ks-text); margin-bottom: 2px; }
+.prod-sub { font-size: 12px; color: var(--ks-text-muted); }
 .prod-tag {
   display: inline-block;
-  background: #f5ede7;
-  color: #8F573A;
+  background: var(--ks-brown-light);
+  color: var(--ks-brown);
   border-radius: 99px;
   padding: 3px 8px;
   font-size: 10px;
@@ -74,15 +74,15 @@
   border-radius: 10px;
   padding: 10px 6px;
   text-align: center;
-  border: 0.5px solid #e8d5c9;
+  border: 0.5px solid var(--ks-border);
   background: #fff;
 }
-.tier-card.t1 { background: #f5ede7; border-color: #8F573A; }
-.tier-card.t2 { background: #fff8ee; border-color: #E8A045; }
-.tier-card.t3 { background: #fff0f0; border-color: #FF585D; }
+.tier-card.t1 { background: var(--ks-brown-light); border-color: var(--ks-brown); }
+.tier-card.t2 { background: #fff8ee; border-color: var(--ks-gold); }
+.tier-card.t3 { background: var(--ks-coral-light); border-color: var(--ks-coral); }
 .tier-icon { font-size: 20px; margin-bottom: 3px; }
 .tier-name { font-size: 10px; font-weight: 500; line-height: 1.3; }
-.tier-card.t1 .tier-name { color: #6B3E27; }
+.tier-card.t1 .tier-name { color: var(--ks-brown-dark); }
 .tier-card.t2 .tier-name { color: #7a5010; }
-.tier-card.t3 .tier-name { color: #d93f44; }
-.tier-score { font-size: 10px; color: #8B6555; margin-top: 2px; }
+.tier-card.t3 .tier-name { color: var(--ks-coral-dark); }
+.tier-score { font-size: 10px; color: var(--ks-text-muted); margin-top: 2px; }
