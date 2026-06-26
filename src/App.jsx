@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
 import Welcome from './components/Welcome.jsx'
 import Quiz from './components/Quiz.jsx'
+import PhotoPOSM from './components/PhotoPOSM.jsx'
 import ScoreReveal from './components/ScoreReveal.jsx'
 import ClaimForm from './components/ClaimForm.jsx'
 import ClaimCode from './components/ClaimCode.jsx'
 import Expired from './components/Expired.jsx'
-
-const OUTLET_NAME = 'Tiara Dewata Supermarket'
 
 function genCode() {
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -45,6 +44,7 @@ export default function App() {
   const [kode, setKode] = useState('')
   const [saving, setSaving] = useState(false)
   const [ipData, setIpData] = useState(null)
+  const [fotoPosmUrl, setFotoPosmUrl] = useState(null)
 
   useEffect(() => { initApp() }, [])
 
@@ -103,25 +103,35 @@ export default function App() {
     }))
   }
 
+  function handlePhotoNext(url) {
+    setFotoPosmUrl(url)
+    setScreen('score')
+  }
+
   async function handleFormSubmit(formData) {
     setSaving(true)
     try {
       const code = genCode()
       const currentStock = stock[tierKey]
-      if (currentStock <= 0) { setExpiredReason('stock'); setScreen('expired'); setSaving(false); return }
+      if (currentStock <= 0) {
+        setExpiredReason('stock'); setScreen('expired'); setSaving(false); return
+      }
 
       const { error } = await supabase.from('ks_claims').insert({
         kode: code,
         nama: formData.nama,
         whatsapp: formData.wa,
         tier: tierKey,
-        hadiah: tierKey === 't1' ? 'Voucher E-Money Rp 50.000' : tierKey === 't2' ? 'Merchandise Kawan Senja' : 'Paket Kawan Senja',
+        hadiah: tierKey === 't1' ? 'Voucher E-Money Rp 50.000'
+          : tierKey === 't2' ? 'Merchandise Kawan Senja'
+          : 'Paket Kawan Senja',
         emoney_platform: formData.emPlatform || null,
         emoney_hp: formData.emHp || null,
         delivery_type: formData.deliveryType || null,
         alamat: formData.alamat || null,
         kota: formData.kota || null,
         quiz_score: quizScore,
+        foto_posm_url: fotoPosmUrl || null,
         ip_address: ipData?.ip_address || null,
         kota_ip: ipData?.kota || null,
         provinsi_ip: ipData?.provinsi || null,
@@ -164,7 +174,11 @@ export default function App() {
   )
 
   if (screen === 'quiz') return (
-    <Quiz onFinish={(s) => { setQuizScore(s); setScreen('score') }} />
+    <Quiz onFinish={(s) => { setQuizScore(s); setScreen('photo') }} />
+  )
+
+  if (screen === 'photo') return (
+    <PhotoPOSM onNext={handlePhotoNext} />
   )
 
   if (screen === 'score') return (
