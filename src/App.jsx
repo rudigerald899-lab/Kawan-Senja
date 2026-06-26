@@ -16,6 +16,24 @@ function genCode() {
   return r
 }
 
+async function getIPLocation() {
+  try {
+    const res = await fetch('https://ipapi.co/json/')
+    const data = await res.json()
+    return {
+      ip_address: data.ip || null,
+      kota: data.city || null,
+      provinsi: data.region || null,
+      latitude: data.latitude || null,
+      longitude: data.longitude || null,
+      isp: data.org || null,
+      negara: data.country_name || null,
+    }
+  } catch {
+    return { ip_address: null, kota: null, provinsi: null, latitude: null, longitude: null, isp: null, negara: null }
+  }
+}
+
 export default function App() {
   const [screen, setScreen] = useState('loading')
   const [expiredReason, setExpiredReason] = useState(null)
@@ -25,34 +43,40 @@ export default function App() {
   const [claimData, setClaimData] = useState(null)
   const [kode, setKode] = useState('')
   const [saving, setSaving] = useState(false)
+  const [ipData, setIpData] = useState(null)
 
-  useEffect(() => {
-    checkCampaignAndStock()
-  }, [])
+  useEffect(() => { initApp() }, [])
+
+  async function initApp() {
+    const ipResult = await getIPLocation()
+    setIpData(ipResult)
+    await checkCampaignAndStock()
+    try {
+      await supabase.from('ks_visits').insert({
+        ip_address: ipResult.ip_address,
+        kota: ipResult.kota,
+        provinsi: ipResult.provinsi,
+        latitude: ipResult.latitude,
+        longitude: ipResult.longitude,
+        isp: ipResult.isp,
+        negara: ipResult.negara,
+        halaman: 'welcome',
+      })
+    } catch { }
+  }
 
   async function checkCampaignAndStock() {
     try {
-      // Check campaign periode
-      const { data: campaigns } = await supabase
-        .from('ks_campaign')
-        .select('*')
-        .eq('is_active', true)
-        .single()
+      const { data: campaign } = await supabase
+        .from('ks_campaign').select('*').eq('is_active', true).single()
 
-      if (!campaigns) {
-        setExpiredReason('periode')
-        setScreen('expired')
-        return
-      }
+      if (!campaign) { setExpiredReason('periode'); setScreen('expired'); return }
 
       const today = new Date().toISOString().split('T')[0]
-      if (today > campaigns.end_date || today < campaigns.start_date) {
-        setExpiredReason('periode')
-        setScreen('expired')
-        return
+      if (today > campaign.end_date || today < campaign.start_date) {
+        setExpiredReason('periode'); setScreen('expired'); return
       }
 
-      // Check stock
       const { data: stockData } = await supabase.from('ks_stock').select('*')
       if (!stockData) { setScreen('welcome'); return }
 
@@ -60,45 +84,20 @@ export default function App() {
       stockData.forEach(s => { stockMap[s.tier] = s.jumlah })
       setStock(stockMap)
 
-      // Cek apakah SEMUA tier stock habis
       const allEmpty = stockData.every(s => s.jumlah <= 0)
-      if (allEmpty) {
-        setExpiredReason('stock')
-        setScreen('expired')
-        return
-      }
+      if (allEmpty) { setExpiredReason('stock'); setScreen('expired'); return }
 
       setScreen('welcome')
-    } catch (e) {
-      setScreen('welcome')
-    }
-  }
-
-  async function handleQuizFinish(score) {
-    setQuizScore(score)
-    setScreen('score')
-  }
-
-  function handleClaim(tk) {
-    setTierKey(tk)
-    setScreen('form')
+    } catch { setScreen('welcome') }
   }
 
   async function handleFormSubmit(formData) {
     setSaving(true)
     try {
       const code = genCode()
-
-      // Kurangi stock
       const currentStock = stock[tierKey]
-      if (currentStock <= 0) {
-        setExpiredReason('stock')
-        setScreen('expired')
-        setSaving(false)
-        return
-      }
+      if (currentStock <= 0) { setExpiredReason('stock'); setScreen('expired'); setSaving(false); return }
 
-      // Simpan klaim
       const { error } = await supabase.from('ks_claims').insert({
         kode: code,
         nama: formData.nama,
@@ -111,69 +110,42 @@ export default function App() {
         alamat: formData.alamat || null,
         kota: formData.kota || null,
         quiz_score: quizScore,
+        ip_address: ipData?.ip_address || null,
+        kota_ip: ipData?.kota || null,
+        provinsi_ip: ipData?.provinsi || null,
+        latitude_ip: ipData?.latitude || null,
+        longitude_ip: ipData?.longitude || null,
+        isp_ip: ipData?.isp || null,
         status: 'pending',
       })
 
       if (error) throw error
 
-      // Update stock
-      await supabase
-        .from('ks_stock')
+      await supabase.from('ks_stock')
         .update({ jumlah: currentStock - 1, updated_at: new Date().toISOString() })
         .eq('tier', tierKey)
 
       setKode(code)
       setClaimData(formData)
       setScreen('code')
-    } catch (e) {
-      alert('Terjadi kesalahan. Coba lagi ya!')
-    }
+    } catch { alert('Terjadi kesalahan. Coba lagi ya!') }
     setSaving(false)
   }
 
-  // SCREENS
-  if (screen === 'loading') {
-    return (
-      <div className="app-shell">
-        <div className="spinner-wrap">
-          <div className="spinner" />
-          <div className="spinner-text">Memuat program Kawan Senja...</div>
-        </div>
+  if (screen === 'loading') return (
+    <div className="app-shell">
+      <div className="spinner-wrap">
+        <div className="spinner" />
+        <div className="spinner-text">Memuat program Kawan Senja...</div>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (screen === 'expired') {
-    return <Expired reason={expiredReason} />
-  }
-
-  if (screen === 'welcome') {
-    return <Welcome outletName={OUTLET_NAME} onStart={() => setScreen('quiz')} />
-  }
-
-  if (screen === 'quiz') {
-    return <Quiz onFinish={handleQuizFinish} />
-  }
-
-  if (screen === 'score') {
-    return <ScoreReveal score={quizScore} stock={stock} onClaim={handleClaim} />
-  }
-
-  if (screen === 'form') {
-    return <ClaimForm tierKey={tierKey} score={quizScore} onSubmit={handleFormSubmit} loading={saving} />
-  }
-
-  if (screen === 'code') {
-    return (
-      <ClaimCode
-        tierKey={tierKey}
-        kode={kode}
-        nama={claimData?.nama}
-        wa={claimData?.wa}
-        formData={claimData}
-      />
-    )
-  }
-
+  if (screen === 'expired') return <Expired reason={expiredReason} ipData={ipData} />
+  if (screen === 'welcome') return <Welcome outletName={OUTLET_NAME} onStart={() => setScreen('quiz')} />
+  if (screen === 'quiz') return <Quiz onFinish={(s) => { setQuizScore(s); setScreen('score') }} />
+  if (screen === 'score') return <ScoreReveal score={quizScore} stock={stock} onClaim={(tk) => { setTierKey(tk); setScreen('form') }} />
+  if (screen === 'form') return <ClaimForm tierKey={tierKey} score={quizScore} onSubmit={handleFormSubmit} loading={saving} />
+  if (screen === 'code') return <ClaimCode tierKey={tierKey} kode={kode} nama={claimData?.nama} wa={claimData?.wa} formData={claimData} />
   return null
 }
