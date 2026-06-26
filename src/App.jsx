@@ -28,9 +28,10 @@ async function getIPLocation() {
       longitude: data.longitude || null,
       isp: data.org || null,
       negara: data.country_name || null,
+      source: 'ip',
     }
   } catch {
-    return { ip_address: null, kota: null, provinsi: null, latitude: null, longitude: null, isp: null, negara: null }
+    return { ip_address: null, kota: null, provinsi: null, latitude: null, longitude: null, isp: null, negara: null, source: 'ip' }
   }
 }
 
@@ -91,6 +92,17 @@ export default function App() {
     } catch { setScreen('welcome') }
   }
 
+  function handleLocationUpdate(gpsData) {
+    setIpData(prev => ({
+      ...prev,
+      kota: gpsData.kota || prev?.kota,
+      provinsi: gpsData.provinsi || prev?.provinsi,
+      latitude: gpsData.latitude || prev?.latitude,
+      longitude: gpsData.longitude || prev?.longitude,
+      source: 'gps',
+    }))
+  }
+
   async function handleFormSubmit(formData) {
     setSaving(true)
     try {
@@ -142,10 +154,45 @@ export default function App() {
   )
 
   if (screen === 'expired') return <Expired reason={expiredReason} ipData={ipData} />
-  if (screen === 'welcome') return <Welcome outletName={OUTLET_NAME} onStart={() => setScreen('quiz')} />
-  if (screen === 'quiz') return <Quiz onFinish={(s) => { setQuizScore(s); setScreen('score') }} />
-  if (screen === 'score') return <ScoreReveal score={quizScore} stock={stock} onClaim={(tk) => { setTierKey(tk); setScreen('form') }} />
-  if (screen === 'form') return <ClaimForm tierKey={tierKey} score={quizScore} onSubmit={handleFormSubmit} loading={saving} />
-  if (screen === 'code') return <ClaimCode tierKey={tierKey} kode={kode} nama={claimData?.nama} wa={claimData?.wa} formData={claimData} />
+
+  if (screen === 'welcome') return (
+    <Welcome
+      ipData={ipData}
+      onStart={() => setScreen('quiz')}
+      onLocationUpdate={handleLocationUpdate}
+    />
+  )
+
+  if (screen === 'quiz') return (
+    <Quiz onFinish={(s) => { setQuizScore(s); setScreen('score') }} />
+  )
+
+  if (screen === 'score') return (
+    <ScoreReveal
+      score={quizScore}
+      stock={stock}
+      onClaim={(tk) => { setTierKey(tk); setScreen('form') }}
+    />
+  )
+
+  if (screen === 'form') return (
+    <ClaimForm
+      tierKey={tierKey}
+      score={quizScore}
+      onSubmit={handleFormSubmit}
+      loading={saving}
+    />
+  )
+
+  if (screen === 'code') return (
+    <ClaimCode
+      tierKey={tierKey}
+      kode={kode}
+      nama={claimData?.nama}
+      wa={claimData?.wa}
+      formData={claimData}
+    />
+  )
+
   return null
 }
