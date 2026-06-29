@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
+import { generateFingerprint, hasClaimedToken, setClaimedToken, getClaimedToken } from './utils/fingerprint.js'
 import Welcome from './components/Welcome.jsx'
 import Quiz from './components/Quiz.jsx'
+import PhotoPOSM from './components/PhotoPOSM.jsx'
 import ScoreReveal from './components/ScoreReveal.jsx'
 import ClaimForm from './components/ClaimForm.jsx'
 import ClaimCode from './components/ClaimCode.jsx'
 import Expired from './components/Expired.jsx'
-
-const OUTLET_NAME = 'Tiara Dewata Supermarket'
+import AlreadyClaimed from './components/AlreadyClaimed.jsx'
 
 function genCode() {
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -28,10 +29,15 @@ async function getIPLocation() {
       longitude: data.longitude || null,
       isp: data.org || null,
       negara: data.country_name || null,
+      source: 'ip',
     }
   } catch {
-    return { ip_address: null, kota: null, provinsi: null, latitude: null, longitude: null, isp: null, negara: null }
+    return { ip_address: null, kota: null, provinsi: null, latitude: null, longitude: null, isp: null, negara: null, source: 'ip' }
   }
+}
+
+function getQRFromURL() {
+  return new URLSearchParams(window.location.search).get('qr') || null
 }
 
 export default function App() {
@@ -44,13 +50,69 @@ export default function App() {
   const [kode, setKode] = useState('')
   const [saving, setSaving] = useState(false)
   const [ipData, setIpData] = useState(null)
+  const [fotoPosmUrl, setFotoPosmUrl] = useState(null)
+  const [qrData, setQrData] = useState(null)
+  const [fingerprint, setFingerprint] = useState(null)
+  const [alreadyClaimedKode, setAlreadyClaimedKode] = useState(null)
 
   useEffect(() => { initApp() }, [])
 
   async function initApp() {
+    const qrId = getQRFromURL()
+
+    // LAYER 1: Check LocalStorage token first (fastest)
+    if (hasClaimedToken()) {
+      const token = getClaimedToken()
+      setAlreadyClaimedKode(token?.kode || null)
+      setScreen('already_claimed')
+      return
+    }
+
+    // Generate fingerprint
+    const fp = await generateFingerprint()
+    setFingerprint(fp)
+
+    // LAYER 2: Check fingerprint in database
+    try {
+      const { data: fpData } = await supabase
+        .from('ks_device_fingerprints')
+        .select('kode_klaim')
+        .eq('fingerprint_hash', fp)
+        .single()
+
+      if (fpData) {
+        // Device already claimed — set token for future checks
+        setClaimedToken(fpData.kode_klaim)
+        setAlreadyClaimedKode(fpData.kode_klaim)
+        setScreen('already_claimed')
+        return
+      }
+    } catch { /* Not found = good, continue */ }
+
+    // Fetch IP & QR data in parallel
     const ipResult = await getIPLocation()
     setIpData(ipResult)
+
+    if (qrId) {
+      try {
+        const { data } = await supabase
+          .from('ks_qr_codes')
+          .select('*')
+          .eq('qr_id', qrId)
+          .single()
+        if (data) {
+          setQrData(data)
+          await supabase
+            .from('ks_qr_codes')
+            .update({ scan_count: data.scan_count + 1 })
+            .eq('qr_id', qrId)
+        }
+      } catch { }
+    }
+
     await checkCampaignAndStock()
+
+    // Log visitor
     try {
       await supabase.from('ks_visits').insert({
         ip_address: ipResult.ip_address,
@@ -61,6 +123,9 @@ export default function App() {
         isp: ipResult.isp,
         negara: ipResult.negara,
         halaman: 'welcome',
+        qr_id: qrId || null,
+        channel: qrId ? qrId.split('-')[0] : null,
+        posm_type: qrId ? qrId.split('-').slice(1).join('-') : null,
       })
     } catch { }
   }
@@ -91,44 +156,99 @@ export default function App() {
     } catch { setScreen('welcome') }
   }
 
+  function handleLocationUpdate(gpsData) {
+    setIpData(prev => ({
+      ...prev,
+      kota: gpsData.kota || prev?.kota,
+      provinsi: gpsData.provinsi || prev?.provinsi,
+      latitude: gpsData.latitude || prev?.latitude,
+      longitude: gpsData.longitude || prev?.longitude,
+      source: 'gps',
+    }))
+  }
+
   async function handleFormSubmit(formData) {
     setSaving(true)
     try {
+      // LAYER 3: Check WA number in database
+      const { data: waCheck } = await supabase
+        .from('ks_claims')
+        .select('kode')
+        .eq('whatsapp', formData.wa)
+        .single()
+
+      if (waCheck) {
+        setClaimedToken(waCheck.kode)
+        setAlreadyClaimedKode(waCheck.kode)
+        setScreen('already_claimed')
+        setSaving(false)
+        return
+      }
+
       const code = genCode()
       const currentStock = stock[tierKey]
-      if (currentStock <= 0) { setExpiredReason('stock'); setScreen('expired'); setSaving(false); return }
+
+      if (currentStock <= 0) {
+        setExpiredReason('stock'); setScreen('expired'); setSaving(false); return
+      }
 
       const { error } = await supabase.from('ks_claims').insert({
         kode: code,
         nama: formData.nama,
         whatsapp: formData.wa,
         tier: tierKey,
-        hadiah: tierKey === 't1' ? 'Voucher E-Money Rp 50.000' : tierKey === 't2' ? 'Merchandise Kawan Senja' : 'Paket Kawan Senja',
+        hadiah: tierKey === 't1' ? 'Voucher E-Money Rp 50.000'
+          : tierKey === 't2' ? 'Merchandise Kawan Senja'
+          : 'Paket Kawan Senja',
         emoney_platform: formData.emPlatform || null,
         emoney_hp: formData.emHp || null,
         delivery_type: formData.deliveryType || null,
         alamat: formData.alamat || null,
         kota: formData.kota || null,
         quiz_score: quizScore,
+        foto_posm_url: fotoPosmUrl || null,
         ip_address: ipData?.ip_address || null,
         kota_ip: ipData?.kota || null,
         provinsi_ip: ipData?.provinsi || null,
         latitude_ip: ipData?.latitude || null,
         longitude_ip: ipData?.longitude || null,
         isp_ip: ipData?.isp || null,
+        qr_id: qrData?.qr_id || null,
+        channel: qrData?.channel || null,
+        posm_type: qrData?.posm_type || null,
         status: 'pending',
       })
 
       if (error) throw error
 
+      // Kurangi stock
       await supabase.from('ks_stock')
         .update({ jumlah: currentStock - 1, updated_at: new Date().toISOString() })
         .eq('tier', tierKey)
 
+      // Simpan fingerprint ke database
+      try {
+        await supabase.from('ks_device_fingerprints').insert({
+          fingerprint_hash: fingerprint,
+          whatsapp: formData.wa,
+          kode_klaim: code,
+          qr_id: qrData?.qr_id || null,
+          channel: qrData?.channel || null,
+          posm_type: qrData?.posm_type || null,
+          kota_ip: ipData?.kota || null,
+        })
+      } catch { /* Silent — fingerprint save failure shouldn't block claim */ }
+
+      // Set LocalStorage token
+      setClaimedToken(code)
+
       setKode(code)
       setClaimData(formData)
       setScreen('code')
-    } catch { alert('Terjadi kesalahan. Coba lagi ya!') }
+    } catch (e) {
+      console.error(e)
+      alert('Terjadi kesalahan. Coba lagi ya!')
+    }
     setSaving(false)
   }
 
@@ -141,11 +261,32 @@ export default function App() {
     </div>
   )
 
+  if (screen === 'already_claimed') return <AlreadyClaimed kode={alreadyClaimedKode} />
   if (screen === 'expired') return <Expired reason={expiredReason} ipData={ipData} />
-  if (screen === 'welcome') return <Welcome outletName={OUTLET_NAME} onStart={() => setScreen('quiz')} />
-  if (screen === 'quiz') return <Quiz onFinish={(s) => { setQuizScore(s); setScreen('score') }} />
-  if (screen === 'score') return <ScoreReveal score={quizScore} stock={stock} onClaim={(tk) => { setTierKey(tk); setScreen('form') }} />
-  if (screen === 'form') return <ClaimForm tierKey={tierKey} score={quizScore} onSubmit={handleFormSubmit} loading={saving} />
-  if (screen === 'code') return <ClaimCode tierKey={tierKey} kode={kode} nama={claimData?.nama} wa={claimData?.wa} formData={claimData} />
+
+  if (screen === 'welcome') return (
+    <Welcome ipData={ipData} onStart={() => setScreen('quiz')} onLocationUpdate={handleLocationUpdate} />
+  )
+
+  if (screen === 'quiz') return (
+    <Quiz onFinish={(s) => { setQuizScore(s); setScreen('photo') }} />
+  )
+
+  if (screen === 'photo') return (
+    <PhotoPOSM onNext={(url) => { setFotoPosmUrl(url); setScreen('score') }} />
+  )
+
+  if (screen === 'score') return (
+    <ScoreReveal score={quizScore} stock={stock} onClaim={(tk) => { setTierKey(tk); setScreen('form') }} />
+  )
+
+  if (screen === 'form') return (
+    <ClaimForm tierKey={tierKey} score={quizScore} onSubmit={handleFormSubmit} loading={saving} />
+  )
+
+  if (screen === 'code') return (
+    <ClaimCode tierKey={tierKey} kode={kode} nama={claimData?.nama} wa={claimData?.wa} formData={claimData} />
+  )
+
   return null
 }
