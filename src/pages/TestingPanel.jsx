@@ -32,23 +32,25 @@ export default function TestingPanel() {
     const wa = waInput.trim()
     await supabase.from('ks_device_fingerprints').delete().eq('whatsapp', wa)
     await supabase.from('ks_claims').delete().eq('whatsapp', wa)
+    setClaims(prev => prev.filter(c => c.whatsapp !== wa))
+    setFingerprints(prev => prev.filter(f => f.whatsapp !== wa))
     setWaInput('')
     showMsg(`✅ Nomor ${wa} berhasil di-unblock`)
-    await fetchData()
   }
 
   async function unblockFingerprint(id, wa) {
     await supabase.from('ks_device_fingerprints').delete().eq('id', id)
+    setFingerprints(prev => prev.filter(f => f.id !== id))
     showMsg(`✅ Device ${wa || 'unknown'} berhasil di-unblock`)
-    await fetchData()
   }
 
   async function deleteClaim(kode, whatsapp) {
     if (!window.confirm(`Hapus klaim ${kode} (${whatsapp})?`)) return
     await supabase.from('ks_claims').delete().eq('kode', kode)
     await supabase.from('ks_device_fingerprints').delete().eq('whatsapp', whatsapp)
+    setClaims(prev => prev.filter(c => c.kode !== kode))
+    setFingerprints(prev => prev.filter(f => f.whatsapp !== whatsapp))
     showMsg(`✅ Klaim ${kode} dihapus`)
-    await fetchData()
   }
 
   async function resetAllTestData() {
@@ -64,9 +66,10 @@ export default function TestingPanel() {
       supabase.from('ks_stock').update({ jumlah: 30 }).eq('tier', 't2'),
       supabase.from('ks_stock').update({ jumlah: 100 }).eq('tier', 't3'),
     ])
+    setClaims([])
+    setFingerprints([])
     setResetting(false)
     showMsg('✅ Semua data test berhasil direset')
-    await fetchData()
   }
 
   if (loading) return (
@@ -126,11 +129,8 @@ export default function TestingPanel() {
             🔄 Refresh
           </button>
         </div>
-
         {fingerprints.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: '#8B6555', fontSize: 13 }}>
-            Belum ada device yang terblokir
-          </div>
+          <div style={{ textAlign: 'center', padding: '24px 0', color: '#8B6555', fontSize: 13 }}>Belum ada device yang terblokir</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {fingerprints.map(fp => (
@@ -169,11 +169,8 @@ export default function TestingPanel() {
             🔄 Refresh
           </button>
         </div>
-
         {claims.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: '#8B6555', fontSize: 13 }}>
-            Belum ada klaim
-          </div>
+          <div style={{ textAlign: 'center', padding: '24px 0', color: '#8B6555', fontSize: 13 }}>Belum ada klaim</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {claims.map(c => (
