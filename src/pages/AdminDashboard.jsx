@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../supabase.js'
+import TestingPanel from './TestingPanel.jsx'
 
 const REFRESH_INTERVAL = 30000
 const CHANNEL_COLORS = { WHS: '#8F573A', PND: '#FF585D', TLS: '#E8A045' }
@@ -34,8 +35,8 @@ function Bar({ label, count, total, color, icon }) {
   )
 }
 
-const TABS = ['overview', 'channel', 'posm', 'klaim', 'visitor', 'foto', 'stock', 'qr']
-const TAB_LABELS = { overview: 'Overview', channel: 'Channel', posm: 'POSM', klaim: 'Data Klaim', visitor: 'Visitor', foto: 'Foto POSM', stock: 'Stok', qr: 'QR Manager' }
+const TABS = ['overview', 'channel', 'posm', 'klaim', 'visitor', 'foto', 'stock', 'qr', 'testing']
+const TAB_LABELS = { overview: 'Overview', channel: 'Channel', posm: 'POSM', klaim: 'Data Klaim', visitor: 'Visitor', foto: 'Foto POSM', stock: 'Stok', qr: 'QR Manager', testing: '🔧 Testing' }
 
 export default function AdminDashboard() {
   const [claims, setClaims] = useState([])
@@ -510,6 +511,9 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* TESTING TAB */}
+        {activeTab === 'testing' && <TestingPanel />}
 
       </div>
 
