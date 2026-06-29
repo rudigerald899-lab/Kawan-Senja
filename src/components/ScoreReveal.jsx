@@ -30,64 +30,28 @@ const TIERS = {
   },
 }
 
-// Weighted probability berdasarkan skor
-// Skor tinggi = peluang T1 lebih besar tapi tidak dijamin
-// User tidak pernah tahu probabilitasnya
-function assignTier(score, stock) {
-  // Tentukan probability pool berdasarkan skor
-  let weights
-  if (score >= 8) {
-    // Skor tinggi: peluang T1 besar tapi tidak 100%
-    weights = { t1: 60, t2: 30, t3: 10 }
-  } else if (score >= 5) {
-    // Skor sedang: peluang T2 dominan
-    weights = { t1: 15, t2: 60, t3: 25 }
-  } else {
-    // Skor rendah: peluang T3 dominan
-    weights = { t1: 5, t2: 20, t3: 75 }
-  }
-
-  // Kalau stock tier habis → hapus dari pool
-  if (stock.t1 <= 0) weights.t1 = 0
-  if (stock.t2 <= 0) weights.t2 = 0
-  if (stock.t3 <= 0) weights.t3 = 0
-
-  const total = weights.t1 + weights.t2 + weights.t3
-  if (total === 0) return null // semua habis
-
-  // Random pick berdasarkan weight
-  let rand = Math.random() * total
-  if (rand < weights.t1) return 't1'
-  rand -= weights.t1
-  if (rand < weights.t2) return 't2'
+export function getTierKey(score) {
+  if (score >= 8) return 't1'
+  if (score >= 5) return 't2'
   return 't3'
 }
 
-export { TIERS, assignTier }
+export { TIERS }
 
 export default function ScoreReveal({ score, stock, onClaim }) {
-  const tierKey = assignTier(score, stock)
-
-  if (!tierKey) {
-    return (
-      <div className="app-shell">
-        <Header subtitle="Hasil Quiz" />
-        <div className="body" style={{ textAlign: 'center', paddingTop: 40 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>😔</div>
-          <h2 style={{ fontSize: 20, fontWeight: 500, color: '#2C1810', marginBottom: 8 }}>Waduh, hadiah sudah habis!</h2>
-          <p style={{ fontSize: 14, color: '#8B6555', lineHeight: 1.6 }}>Semua hadiah sudah diklaim. Terima kasih sudah ikut program Kawan Senja!</p>
-        </div>
-      </div>
-    )
-  }
-
+  const tierKey = getTierKey(score)
   const tier = TIERS[tierKey]
   const stockCount = stock[tierKey] || 0
 
-  const messages = {
-    t1: 'Selamat! Kamu beruntung mendapat hadiah spesial!',
-    t2: 'Kamu beruntung! Hadiah menanti kamu.',
-    t3: 'Selamat! Kamu mendapat hadiah dari Kawan Senja!',
+  const titles = {
+    t1: 'Sempurna! Skor tertinggi!',
+    t2: 'Bagus! Kamu dapat hadiah fisik.',
+    t3: 'Selamat! Kamu menang hadiah MBI!',
+  }
+  const subs = {
+    t1: 'Kamu masuk Tier 1 dan berhak dapat voucher e-money langsung!',
+    t2: 'Kamu masuk Tier 2. Merchandise Kawan Senja dikirim ke alamatmu.',
+    t3: 'Kamu masuk Tier 3. Hadiah spesial dikirim atau ambil di kantor MBI Bali.',
   }
 
   return (
@@ -95,22 +59,27 @@ export default function ScoreReveal({ score, stock, onClaim }) {
       <Header subtitle="Hasil Quiz" />
       <div className="body">
         <div style={{ textAlign: 'center', padding: '8px 0 18px' }}>
-          <div style={{ fontSize: 52, marginBottom: 12 }}>🎉</div>
-          <div style={{ fontSize: 19, fontWeight: 500, color: '#2C1810', marginBottom: 4 }}>
-            {messages[tierKey]}
+          <div style={{
+            width: 88, height: 88, borderRadius: '50%',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 12px', border: '3px solid',
+            ...tier.circleStyle,
+          }}>
+            <div style={{ fontSize: 28, fontWeight: 500, lineHeight: 1 }}>{score}</div>
+            <div style={{ fontSize: 11, opacity: .75 }}>dari 10</div>
           </div>
-          <div style={{ fontSize: 13, color: '#8B6555', marginBottom: 18, lineHeight: 1.5 }}>
-            Isi data di bawah untuk klaim hadiahmu.
-          </div>
+          <div style={{ fontSize: 19, fontWeight: 500, color: 'var(--ks-text)', marginBottom: 4 }}>{titles[tierKey]}</div>
+          <div style={{ fontSize: 13, color: 'var(--ks-text-muted)', marginBottom: 18, lineHeight: 1.5 }}>{subs[tierKey]}</div>
         </div>
 
-        <div style={{ background: tier.bannerBg, borderRadius: 12, padding: 18, color: '#fff', marginBottom: 18 }}>
+        <div style={{ background: tier.bannerBg, borderRadius: 12, padding: 18, color: '#fff', marginBottom: 18, position: 'relative', overflow: 'hidden' }}>
           <div style={{ fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', opacity: .8, marginBottom: 3 }}>Hadiah kamu</div>
+          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8, opacity: .9 }}>{tier.label}</div>
           <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>{tier.reward}</div>
           <div style={{ fontSize: 12, opacity: .8, lineHeight: 1.4 }}>{tier.desc}</div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,.18)', borderRadius: 6, padding: '4px 10px', fontSize: 11, marginTop: 10 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', opacity: .8, display: 'inline-block' }} />
-            Stok tersedia: {stockCount} hadiah
+            Stok: {stockCount} hadiah tersedia
           </div>
         </div>
 

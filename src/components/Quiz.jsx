@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import Header from './Header.jsx'
 
 const QUESTIONS = [
@@ -31,89 +31,78 @@ const QUESTIONS = [
   },
 ]
 
-// Shuffle array — urutan acak setiap kali quiz dibuka
-function shuffle(arr) {
-  return [...arr].sort(() => Math.random() - 0.5)
-}
-
 export default function Quiz({ onFinish }) {
   const [curQ, setCurQ] = useState(0)
-  const [totalScore, setTotalScore] = useState(0)
-  const [selectedIdx, setSelectedIdx] = useState(null)
+  const [score, setScore] = useState(0)
+  const [selected, setSelected] = useState(null)
 
-  // Shuffle jawaban sekali saat komponen mount — tidak berubah saat re-render
-  const shuffledQuestions = useMemo(() =>
-    QUESTIONS.map(q => ({ ...q, opts: shuffle(q.opts) }))
-  , [])
+  const progress = ((curQ + 1) / QUESTIONS.length) * 100
+  const q = QUESTIONS[curQ]
 
-  const q = shuffledQuestions[curQ]
-  const progress = ((curQ + 1) / shuffledQuestions.length) * 100
-
-  function handleSelect(idx) {
-    if (selectedIdx !== null) return
-    setSelectedIdx(idx)
+  function handleSelect(pts) {
+    if (selected !== null) return
+    setSelected(pts)
   }
 
   function handleNext() {
-    if (selectedIdx === null) return
-    const pts = q.opts[selectedIdx].pts
-    const newTotal = totalScore + pts
-    if (curQ + 1 < shuffledQuestions.length) {
-      setTotalScore(newTotal)
+    if (selected === null) return
+    const newScore = score + selected
+    if (curQ + 1 < QUESTIONS.length) {
+      setScore(newScore)
       setCurQ(curQ + 1)
-      setSelectedIdx(null)
+      setSelected(null)
     } else {
-      onFinish(newTotal)
+      onFinish(newScore)
     }
   }
 
   return (
     <div className="app-shell">
-      <Header subtitle={`Pertanyaan ${curQ + 1} dari ${shuffledQuestions.length}`} />
+      <Header subtitle={`Pertanyaan ${curQ + 1} dari ${QUESTIONS.length}`} />
       <div className="body">
         <div className="prog-wrap">
           <div className="prog-fill" style={{ width: `${progress}%` }} />
         </div>
-        <div style={{ fontSize: 11, color: '#8B6555', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>
+        <div style={{ fontSize: 11, color: 'var(--ks-text-muted)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 6 }}>
           Pertanyaan {curQ + 1}
         </div>
-        <div style={{ fontSize: 17, fontWeight: 500, color: '#2C1810', lineHeight: 1.4, marginBottom: 18 }}>
+        <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--ks-text)', lineHeight: 1.4, marginBottom: 18 }}>
           {q.text}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 20 }}>
-          {q.opts.map((opt, i) => {
-            const isSelected = selectedIdx === i
-            const isLocked = selectedIdx !== null && !isSelected
-            return (
-              <button
-                key={i}
-                onClick={() => handleSelect(i)}
-                disabled={isLocked}
-                style={{
-                  padding: '13px 15px',
-                  background: isSelected ? '#fff0f0' : '#fff',
-                  border: isSelected ? '0.5px solid #FF585D' : '0.5px solid #e8d5c9',
-                  borderRadius: 8,
-                  fontSize: 14,
-                  color: isSelected ? '#d93f44' : isLocked ? '#c4b0a8' : '#2C1810',
-                  fontWeight: isSelected ? 500 : 400,
-                  cursor: isLocked ? 'not-allowed' : 'pointer',
-                  textAlign: 'left',
-                  fontFamily: 'inherit',
-                  opacity: isLocked ? 0.5 : 1,
-                  transition: 'all .15s',
-                  width: '100%',
-                }}
-              >
-                {opt.label}
-                {/* POIN DISEMBUNYIKAN — tidak ada +4, +3, dll */}
-              </button>
-            )
-          })}
+          {q.opts.map((opt, i) => (
+            <button
+              key={i}
+              onClick={() => handleSelect(opt.pts)}
+              style={{
+                padding: '13px 15px',
+                background: selected === opt.pts ? 'var(--ks-coral-light)' : '#fff',
+                border: selected === opt.pts ? '0.5px solid var(--ks-coral)' : '0.5px solid var(--ks-border)',
+                borderRadius: 'var(--radius)',
+                fontSize: 14,
+                color: selected === opt.pts ? 'var(--ks-coral-dark)' : 'var(--ks-text)',
+                fontWeight: selected === opt.pts ? 500 : 400,
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontFamily: 'inherit',
+                transition: 'all .15s',
+              }}
+            >
+              {opt.label}
+              {selected === opt.pts && (
+                <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 99, background: 'rgba(255,88,93,.12)', color: 'var(--ks-coral-dark)', whiteSpace: 'nowrap', marginLeft: 8 }}>
+                  +{opt.pts}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-        {selectedIdx !== null && (
+        {selected !== null && (
           <button className="btn-primary" onClick={handleNext}>
-            {curQ + 1 < shuffledQuestions.length ? 'Lanjut' : 'Lihat Hasil'}
+            {curQ + 1 < QUESTIONS.length ? 'Lanjut' : 'Lihat Hasil'}
           </button>
         )}
       </div>
